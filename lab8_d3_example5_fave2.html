@@ -1,0 +1,197 @@
+<html>
+  <head>
+    <style>
+      .node circle {
+        stroke: #333;
+        stroke-width: 1px;
+        transition: transform 0.2s ease, stroke-width 0.2s ease;
+      }
+
+      .node circle:hover {
+        stroke-width: 2px;
+        transform: scale(1.1);
+        cursor: pointer;
+      }
+
+      #header {
+        margin: auto;
+        width: 60%;
+        text-align: center;
+      }
+
+      h1 {
+        margin: 20px 0;
+        font: bold 28px "Helvetica Neue", Arial, sans-serif;
+        color: #444;
+      }
+
+      p {
+        font-size: 14px;
+        color: #666;
+      }
+
+      .tooltip {
+        position: absolute;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 10px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        font-size: 14px;
+        font-family: "Open Sans", Arial, sans-serif;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+
+      .tooltip h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .tooltip p {
+        margin: 5px 0 0;
+        font-size: 13px;
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="header">
+      <h1>Dynamic Bubble Chart with Animations</h1>
+      <p>
+        This bubble chart visualizes the top 200 cities by their 2020 population
+        using D3.js. It includes smooth animations for an engaging experience.
+      </p>
+    </div>
+
+    <div id="my_dataviz"></div>
+
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script>
+      // Set up dimensions
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const nodePadding = 2.5;
+
+      // Create SVG container
+      const svg = d3
+        .select("#my_dataviz")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+      // Define color scale
+      const color = d3
+        .scaleSequential(d3.interpolateCool)
+        .domain([0, 200]); // Assuming 200 cities
+
+      // Create tooltip
+      const tooltip = d3
+        .select("#my_dataviz")
+        .append("div")
+        .attr("class", "tooltip");
+
+      // Tooltip mouse events
+      const showTooltip = (d) => {
+        tooltip
+          .style("opacity", 1)
+          .html(
+            `<h2>${d.CityName}, ${d.Country}</h2>
+             <p>Population: ${d3.format(".1f")(d.pop2020)} million</p>`
+          )
+          .style("left", `${d3.event.pageX + 15}px`)
+          .style("top", `${d3.event.pageY - 30}px`);
+      };
+
+      const hideTooltip = () => {
+        tooltip.style("opacity", 0);
+      };
+
+      // Load the data
+      d3.csv(
+        "https://raw.githubusercontent.com/chaseingersoll/CityData2018/refs/heads/main/CityData_WUP2018_top200.csv",
+        (d) => {
+          d.pop2020 = +d.pop2020;
+          d.size = d.pop2020 * 2;
+          d.radius = d.size;
+          return d;
+        },
+        (error, data) => {
+          if (error) throw error;
+
+          // Sort data to place larger bubbles in the background
+          data.sort((a, b) => b.size - a.size);
+
+          // Initialize simulation
+          const simulation = d3
+            .forceSimulation(data)
+            .force("x", d3.forceX(width / 2).strength(0.1))
+            .force("y", d3.forceY(height / 2).strength(0.1))
+            .force(
+              "collide",
+              d3
+                .forceCollide()
+                .radius((d) => d.radius + nodePadding)
+                .iterations(1)
+            )
+            .on("tick", ticked);
+
+          // Create bubbles
+          const node = svg
+            .selectAll("circle")
+            .data(data)
+            .enter()
+            .append("circle")
+            .attr("r", 0) // Start with radius 0 for animation
+            .attr("fill", (d, i) => color(i))
+            .attr("stroke", "#333")
+            .attr("stroke-width", 0.5)
+            .on("mouseover", showTooltip)
+            .on("mousemove", showTooltip)
+            .on("mouseleave", hideTooltip)
+            .call(
+              d3
+                .drag()
+                .on("start", dragStarted)
+                .on("drag", dragged)
+                .on("end", dragEnded)
+            );
+
+          // Animate the bubbles to their final size
+          node
+            .transition()
+            .duration(1000)
+            .attr("r", (d) => d.radius);
+
+          // Update positions on tick
+          function ticked() {
+            node
+              .attr("cx", (d) => d.x)
+              .attr("cy", (d) => d.y);
+          }
+
+          // Drag event functions
+          function dragStarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.03).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          }
+
+          function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+          }
+
+          function dragEnded(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+          }
+        }
+      );
+    </script>
+  </body>
+</html>
